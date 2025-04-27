@@ -12,11 +12,11 @@ from tqdm import tqdm
 def validate_results_paths(result_path: Path, metrics: list, arg_name: str):
     if result_path.exists():
         df = pd.read_csv(result_path, sep='\t')
-        if df.columns.tolist() != metrics:
+        if df.columns.tolist()[1:] != metrics:
             raise ValueError(f'`{arg_name}` already exists and the columns \
                              are different than `metrics`! Choose another \
                              path to export file or delete the existing one.')
-        
+
 
 def validate_file_extension(file_path: str, expected_extension: str) -> Path:
     path = Path(file_path)
@@ -68,6 +68,9 @@ def parse_args() -> argparse.Namespace:
                         required=True,
                         help='Path to export TSV file of summary of metrics \
                         results.')
+    parser.add_argument('-i', '--index', type=str, required=True,
+                        help='Name of the entry to be included in the summary \
+                        results file.')
 
     return  parser.parse_args()
 
@@ -121,8 +124,9 @@ def main():
 
     # Calculate summary
     summary = {metric: df_full[metric].mean() for metric in metrics}
-    df_summary = pd.DataFrame([summary])
-    df_summary.to_csv(args.summary_results, sep='\t', index=False)
+    df_summary = pd.DataFrame([summary], index=[args.index])
+    header = not args.summary_results.exists()
+    df_summary.to_csv(args.summary_results, sep='\t', header=header, mode='a+')
 
 
 if __name__ == '__main__':
