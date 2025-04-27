@@ -1,0 +1,129 @@
+import argparse
+from functools import partial
+from pathlib import Path
+
+import pandas as pd
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+from nltk.translate.meteor_score import meteor_score
+from rouge import Rouge
+from tqdm import tqdm
+
+
+def validate_results_paths(result_path: Path, metrics: list, arg_name: str):
+    if result_path.exists():
+        df = pd.read_csv(result_path, sep='\t')
+        if df.columns.tolist() != metrics:
+            raise ValueError(f'`{arg_name}` already exists and the columns \
+                             are different than `metrics`! Choose another \
+                             path to export file or delete the existing one.')
+        
+
+def validate_file_extension(file_path: str, expected_extension: str) -> Path:
+    path = Path(file_path)
+    if path.suffix != expected_extension:
+        raise argparse.ArgumentTypeError(
+            f"File {file_path} does not have required extension \
+            '{expected_extension}'!"
+        )
+    return path
+
+
+def validate_args(args: argparse.Namespace):
+    metrics = sorted(args.metrics)
+    validate_results_paths(args.summary_results, metrics, 'summary_results')
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', '--source',
+                        type=partial(validate_file_extension,
+                                     expected_extension='.jsonl'),
+                        required=True,
+                        help='Source texts, jsonl path.')
+    parser.add_argument('-t', '--target',
+                        type=partial(validate_file_extension,
+                                     expected_extension='.jsonl'),
+                        required=True,
+                        help='Target texts (reference translations), \
+                        jsonl path.')
+    parser.add_argument('-H', '--hypothesis',
+                        type=partial(validate_file_extension,
+                                     expected_extension='.jsonl'),
+                        required=True,
+                        help='Hypothesis texts (candidate translations), \
+                        jsonl path.')
+    parser.add_argument('-m', '--metrics', nargs='+', type=str,
+                        choices=['bleu','meteor','rouge'],
+                        default=['bleu','meteor','rouge'])
+    parser.add_argument('-f', '--full_results',
+                        type=partial(validate_file_extension,
+                                     expected_extension='.tsv'),
+                        required=True,
+                        help='Path to export TSV file of metric values \
+                        for each example.')
+    parser.add_argument('-S', '--summary_results',
+                        type=partial(validate_file_extension,
+                                     expected_extension='.tsv'),
+                        required=True,
+                        help='Path to export TSV file of summary of metrics \
+                        results.')
+
+    return  parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    validate_args(args)
+
+    source = pd.read_json(args.source, orient='records', lines=True,
+                          encoding='utf-8').head(10)
+    target = pd.read_json(args.target, orient='records', lines=True,
+                          encoding='utf-8').head(10)
+    hypothesis = pd.read_json(args.hypothesis, orient='records', lines=True,
+                              encoding='utf-8')
+
+    assert len(source) == len(target) == len(hypothesis), \
+        "Mismatch in number of examples."
+
+    smooth_fn = SmoothingFunction().method1
+    rouge = Rouge()
+
+    metrics = sorted(args.metrics)
+    full_results = []
+
+    values = zip(source['text'], target['text'], hypothesis['text'])
+    for src, tgt, hyp in tqdm(values, total=len(source),
+                              desc='Evaluating translations'):
+        row = {}
+
+        if 'bleu' in metrics:
+            bleu = sentence_bleu(
+                [tgt.split()],
+                hyp.split(),
+                smoothing_function=smooth_fn
+            )
+            row['bleu'] = bleu * 100
+
+        if 'meteor' in metrics:
+            meteor = meteor_score([tgt.split()], hyp.split())
+            row['meteor'] = meteor * 100
+
+        if 'rouge' in metrics:
+            scores = rouge.get_scores(hyp, tgt)[0]
+            row['rouge'] = scores['rouge-l']['f'] * 100
+
+        full_results.append(row)
+
+    # Save full results
+    df_full = pd.DataFrame(full_results)
+    df_full.to_csv(args.full_results, sep='\t', index=False)
+
+    # Calculate summary
+    summary = {metric: df_full[metric].mean() for metric in metrics}
+    df_summary = pd.DataFrame([summary])
+    df_summary.to_csv(args.summary_results, sep='\t', index=False)
+
+
+if __name__ == '__main__':
+    main()
