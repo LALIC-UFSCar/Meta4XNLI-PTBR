@@ -118,11 +118,9 @@ def main():
 
         full_results.append(row)
 
-    # Save full results
     df_full = pd.DataFrame(full_results)
     df_full.to_csv(args.full_results, sep='\t', index=False)
 
-    # Calculate summary
     summary = {metric: df_full[metric].mean() for metric in metrics}
     df_summary = pd.DataFrame([summary], index=[args.index])
     header = not args.summary_results.exists()
