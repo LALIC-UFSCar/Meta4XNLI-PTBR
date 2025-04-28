@@ -8,6 +8,8 @@ from rouge import Rouge
 from tqdm import tqdm
 from sacrebleu.metrics import BLEU, CHRF, TER
 
+tqdm.pandas()
+
 
 def validate_results_paths(result_path: Path, metrics: list, arg_name: str):
     if result_path.exists():
@@ -54,8 +56,8 @@ def parse_args() -> argparse.Namespace:
                         help='Hypothesis texts (candidate translations), \
                         jsonl path.')
     parser.add_argument('-m', '--metrics', nargs='+', type=str,
-                        choices=['bleu','chrf','chrf2','ter','meteor','rouge'],
-                        default=['bleu','chrf','chrf2','ter','meteor','rouge'])
+                        choices=['bleu','chrf','chrf2','meteor','rouge','ter'],
+                        default=['bleu','chrf','chrf2','meteor','rouge','ter'])
     parser.add_argument('-f', '--full_results',
                         type=partial(validate_file_extension,
                                      expected_extension='.tsv'),
@@ -89,51 +91,59 @@ def main():
     assert len(source) == len(reference) == len(hypothesis), \
         "Mismatch in number of examples."
 
-    rouge = Rouge()
+    df = pd.merge(source.rename(columns={'text': 'src'})[['id','src']],
+                  reference.rename(columns={'text': 'ref'})[['id','ref']],
+                  how='inner', on='id')
+    df = pd.merge(df,
+                  hypothesis.rename(columns={'text': 'hyp'})[['id','hyp']],
+                  how='inner', on='id')
+
     bleu = BLEU(effective_order=True)
     chrf = CHRF()
     chrf2 = CHRF(word_order=2)
+    rouge = Rouge()
     ter = TER()
 
-    metrics = sorted(args.metrics)
-    full_results = []
+    if 'bleu' in args.metrics:
+        df['bleu'] = df.progress_apply(lambda x: \
+                                      bleu.sentence_score(x['hyp'],
+                                                          [x['ref']]).score,
+                                      axis=1)
 
-    values = zip(source['text'], reference['text'], hypothesis['text'])
-    for src, ref, hyp in tqdm(values, total=len(source),
-                              desc='Evaluating translations'):
-        row = {}
+    if 'chrf' in args.metrics:
+        df['chrf'] = df.progress_apply(lambda x: \
+                                       chrf.sentence_score(x['hyp'],
+                                                           [x['ref']]).score,
+                                       axis=1)
 
-        if 'bleu' in metrics:
-            score = bleu.sentence_score(hyp, [ref]).score
-            row['bleu'] = score
+    if 'chrf2' in args.metrics:
+        df['chrf2'] = df.progress_apply(lambda x: \
+                                        chrf2.sentence_score(x['hyp'],
+                                                            [x['ref']]).score,
+                                        axis=1)
 
-        if 'meteor' in metrics:
-            score = meteor_score([ref.split()], hyp.split())
-            row['meteor'] = score * 100
+    if 'meteor' in args.metrics:
+        df['meteor'] = df.progress_apply(lambda x: \
+                                         meteor_score([x['ref'].split()],
+                                                      x['hyp'].split()) *100,
+                                         axis=1)
 
-        if 'rouge' in metrics:
-            score = rouge.get_scores(hyp, ref)[0]
-            row['rouge'] = score['rouge-l']['f'] * 100
+    if 'rouge' in args.metrics:
+        df['rouge'] = df.progress_apply(lambda x: rouge.get_scores(
+                                            x['hyp'],
+                                            x['ref'])[0]['rouge-l']['f']*100,
+                                        axis=1)
 
-        if 'chrf' in metrics:
-            score = chrf.sentence_score(hyp, [ref]).score
-            row['chrf'] = score
+    if 'ter' in args.metrics:
+        df['ter'] = df.progress_apply(lambda x: \
+                                      ter.sentence_score(x['hyp'],
+                                                         [x['ref']]).score,
+                                      axis=1)
 
-        if 'chrf2' in metrics:
-            score = chrf2.sentence_score(hyp, [ref]).score
-            row['chrf2'] = score
+    df.drop(columns=['src','ref','hyp']).\
+        to_csv(args.full_results, sep='\t', index=False)
 
-        if 'ter' in metrics:
-            score = ter.sentence_score(hyp, [ref]).score
-            row['ter'] = score
-
-        full_results.append(row)
-
-    df_full = pd.DataFrame(full_results)
-    df_full.to_csv(args.full_results, sep='\t', index=False)
-
-    summary = {metric: df_full[metric].mean() for metric in metrics}
-    df_summary = pd.DataFrame([summary], index=[args.index])
+    df_summary = df[args.metrics].mean().to_frame(name=args.index).T
     header = not args.summary_results.exists()
     df_summary.to_csv(args.summary_results, sep='\t', header=header, mode='a+')
 
