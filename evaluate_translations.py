@@ -3,10 +3,10 @@ from functools import partial
 from pathlib import Path
 
 import pandas as pd
-from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 from nltk.translate.meteor_score import meteor_score
 from rouge import Rouge
 from tqdm import tqdm
+from sacrebleu.metrics import BLEU
 
 
 def validate_results_paths(result_path: Path, metrics: list, arg_name: str):
@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
                                      expected_extension='.jsonl'),
                         required=True,
                         help='Source texts, jsonl path.')
-    parser.add_argument('-t', '--target',
+    parser.add_argument('-r', '--reference',
                         type=partial(validate_file_extension,
                                      expected_extension='.jsonl'),
                         required=True,
@@ -80,40 +80,37 @@ def main():
     validate_args(args)
 
     source = pd.read_json(args.source, orient='records', lines=True,
-                          encoding='utf-8').head(10)
-    target = pd.read_json(args.target, orient='records', lines=True,
-                          encoding='utf-8').head(10)
+                          encoding='utf-8')
+    reference = pd.read_json(args.reference, orient='records', lines=True,
+                          encoding='utf-8')
     hypothesis = pd.read_json(args.hypothesis, orient='records', lines=True,
                               encoding='utf-8')
 
-    assert len(source) == len(target) == len(hypothesis), \
+    assert len(source) == len(reference) == len(hypothesis), \
         "Mismatch in number of examples."
 
-    smooth_fn = SmoothingFunction().method1
     rouge = Rouge()
+
+    bleu = BLEU()
 
     metrics = sorted(args.metrics)
     full_results = []
 
-    values = zip(source['text'], target['text'], hypothesis['text'])
-    for src, tgt, hyp in tqdm(values, total=len(source),
+    values = zip(source['text'], reference['text'], hypothesis['text'])
+    for src, ref, hyp in tqdm(values, total=len(source),
                               desc='Evaluating translations'):
         row = {}
 
         if 'bleu' in metrics:
-            bleu = sentence_bleu(
-                [tgt.split()],
-                hyp.split(),
-                smoothing_function=smooth_fn
-            )
+            bleu.sentence_score(hyp, [ref])
             row['bleu'] = bleu * 100
 
         if 'meteor' in metrics:
-            meteor = meteor_score([tgt.split()], hyp.split())
+            meteor = meteor_score([ref.split()], hyp.split())
             row['meteor'] = meteor * 100
 
         if 'rouge' in metrics:
-            scores = rouge.get_scores(hyp, tgt)[0]
+            scores = rouge.get_scores(hyp, ref)[0]
             row['rouge'] = scores['rouge-l']['f'] * 100
 
         full_results.append(row)
