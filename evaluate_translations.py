@@ -6,7 +6,7 @@ import pandas as pd
 from nltk.translate.meteor_score import meteor_score
 from rouge import Rouge
 from tqdm import tqdm
-from sacrebleu.metrics import BLEU
+from sacrebleu.metrics import BLEU, CHRF, TER
 
 
 def validate_results_paths(result_path: Path, metrics: list, arg_name: str):
@@ -54,8 +54,8 @@ def parse_args() -> argparse.Namespace:
                         help='Hypothesis texts (candidate translations), \
                         jsonl path.')
     parser.add_argument('-m', '--metrics', nargs='+', type=str,
-                        choices=['bleu','meteor','rouge'],
-                        default=['bleu','meteor','rouge'])
+                        choices=['bleu','chrf','chrf2','ter','meteor','rouge'],
+                        default=['bleu','chrf','chrf2','ter','meteor','rouge'])
     parser.add_argument('-f', '--full_results',
                         type=partial(validate_file_extension,
                                      expected_extension='.tsv'),
@@ -90,8 +90,10 @@ def main():
         "Mismatch in number of examples."
 
     rouge = Rouge()
-
-    bleu = BLEU()
+    bleu = BLEU(effective_order=True)
+    chrf = CHRF()
+    chrf2 = CHRF(word_order=2)
+    ter = TER()
 
     metrics = sorted(args.metrics)
     full_results = []
@@ -102,16 +104,28 @@ def main():
         row = {}
 
         if 'bleu' in metrics:
-            bleu.sentence_score(hyp, [ref])
-            row['bleu'] = bleu * 100
+            score = bleu.sentence_score(hyp, [ref]).score
+            row['bleu'] = score
 
         if 'meteor' in metrics:
-            meteor = meteor_score([ref.split()], hyp.split())
-            row['meteor'] = meteor * 100
+            score = meteor_score([ref.split()], hyp.split())
+            row['meteor'] = score * 100
 
         if 'rouge' in metrics:
-            scores = rouge.get_scores(hyp, ref)[0]
-            row['rouge'] = scores['rouge-l']['f'] * 100
+            score = rouge.get_scores(hyp, ref)[0]
+            row['rouge'] = score['rouge-l']['f'] * 100
+
+        if 'chrf' in metrics:
+            score = chrf.sentence_score(hyp, [ref]).score
+            row['chrf'] = score
+
+        if 'chrf2' in metrics:
+            score = chrf2.sentence_score(hyp, [ref]).score
+            row['chrf2'] = score
+
+        if 'ter' in metrics:
+            score = ter.sentence_score(hyp, [ref]).score
+            row['ter'] = score
 
         full_results.append(row)
 
