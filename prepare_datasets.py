@@ -2,10 +2,11 @@ import pandas as pd
 from huggingface_hub import hf_hub_download, list_repo_files
 
 
-def include_text_column(file_path):
+def include_columns(file_path):
     df = pd.read_json(file_path, orient='records', lines=True,
                       encoding='utf-8')
-    df['text'] = df.tokens.apply(lambda x: ' '.join(x))
+    df['text'] = df.tokens.str.join(' ')
+    df['has_metaphor'] = df.tags.apply(lambda tags: 1 in tags)
     df.to_json(file_path, orient='records', lines=True, force_ascii=False)
 
 
@@ -25,7 +26,7 @@ def download_dataset():
             local_dir=local_dir
         )
         print(f'Downloaded: {local_path}')
-        include_text_column(local_path)
+        include_columns(local_path)
 
 
 def main():
