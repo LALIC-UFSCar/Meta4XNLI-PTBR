@@ -59,13 +59,13 @@ do
                 --source data/meta4xnli/detection/splits/samples/en/meta4xnli_dev_head_100.jsonl \
                 --reference data/meta4xnli/detection/splits/samples/es/meta4xnli_dev_head_100.jsonl \
                 --hypothesis data/meta4xnli_ptbr/en2es/${NAME}.jsonl \
-                --metrics bleu chrf chrf2 ter meteor rouge \
+                --metrics bleu chrf chrf2 meteor rouge ter \
                 --full_results results/en2es/full_results/${NAME}.tsv \
-                --summary_results results/en2es/summary_results.tsv \
+                --summary_all results/en2es/summary_all_examples.tsv \
+                --summary_metaphors results/en2es/summary_metaphorical_results.tsv \
+                --summary_literals results/en2es/summary_literal_results.tsv \
                 --index ${NAME}
             done
         done
     done
 done
-
-
