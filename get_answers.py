@@ -41,13 +41,28 @@ def get_answer(client: Groq, prompt: str, user_input: str,
     return answer.choices[0].message.content.strip()
 
 
+def get_prompt(main_prompt: str, extra_prompt: str, row: pd.Series) -> str:
+    if extra_prompt is None:
+        return main_prompt
+    if row['has_metaphor']:
+        return main_prompt
+    return extra_prompt
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dataset', type=Path, required=True,
                         help='Path to dataset in .jsonl format.')
     parser.add_argument('-s', '--system', type=Path, required=True,
-                        help='Path to system prompt file.')
+                        help='Path to system prompt file. If \
+                        `additional_system` is passed, this parameter \
+                        represents the system prompt for METAPHORICAL \
+                        examples. Otherwise, it represents the system prompt \
+                        for all examples.')
+    parser.add_argument('-a', '--additional_system', type=Path, required=False,
+                        help='If passed, represents the system prompt for \
+                        LITERAL examples.')
     parser.add_argument('-u', '--user', type=Path, required=True,
                         help='Path to user prompt file. It can contain \
                         placeholders, indicated between braces.')
@@ -69,7 +84,11 @@ def parse_args() -> argparse.Namespace:
 def main():
     args = parse_args()
 
-    system_prompt = args.system.read_text(encoding='utf-8')
+    main_system_prompt = args.system.read_text(encoding='utf-8')
+    if args.additional_system is not None:
+        extra_system_prompt=args.additional_system.read_text(encoding='utf-8')
+    else:
+        extra_system_prompt = None
     user_prompt = args.user.read_text(encoding='utf-8')
     config = parse_yaml(args.config)
 
@@ -86,6 +105,7 @@ def main():
 
     output_records = []
     for _, row in tqdm(df.iterrows(), total=len(df), desc='Generating text'):
+        system_prompt = get_prompt(main_system_prompt,extra_system_prompt,row)
         answer = get_answer(client, system_prompt, row['user_prompt'],
                             config, args.model)
         record = {'id': row['id'], 'text': answer}
