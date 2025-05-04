@@ -1,10 +1,10 @@
 import argparse
 import time
 import os
-import yaml
 from pathlib import Path
 
 import pandas as pd
+import yaml
 from groq import Groq
 from tqdm import tqdm
 
@@ -23,14 +23,14 @@ def fill_placeholders(prompt: str, values: dict) -> str:
 
 
 def get_answer(client: Groq, prompt: str, user_input: str,
-               config: dict) -> str:
+               config: dict, model: str) -> str:
 
     messages = [{'role': 'system', 'content': prompt},
                 {'role': 'user', 'content': user_input}]
 
     answer = client.chat.completions.create(
         messages=messages,
-        model=config['model'],
+        model=model,
         temperature=config['temperature'],
         top_p=config['top_p'],
         stop=None,
@@ -54,6 +54,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('-c', '--config', type=Path, required=True,
                         help='Request configurations related to model, \
                         temperature, etc.')
+    parser.add_argument('-m', '--model', type=str, required=True,
+                        help='Model name.')
     parser.add_argument('-o', '--output', type=Path, required=True,
                         help='Path to store the generations.')
     parser.add_argument('-z', '--sleep', type=int, required=False, default=2,
@@ -84,8 +86,8 @@ def main():
 
     output_records = []
     for _, row in tqdm(df.iterrows(), total=len(df), desc='Generating text'):
-        answer = get_answer(client, system_prompt,
-                            row['user_prompt'], config)
+        answer = get_answer(client, system_prompt, row['user_prompt'],
+                            config, args.model)
         record = {'id': row['id'], 'text': answer}
         output_records.append(record)
         time.sleep(args.sleep) # to overcome the limit of requests per minute
