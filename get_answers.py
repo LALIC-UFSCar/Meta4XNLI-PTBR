@@ -1,6 +1,7 @@
 import argparse
 import time
 import os
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -41,9 +42,25 @@ def get_answer(client: Groq, prompt: str, user_input: str,
     return answer.choices[0].message.content.strip()
 
 
+def spans_to_text(spans: list) -> str:
+    """Converts a list of text spans into a single formatted string."""
+    pattern = re.compile(r'[,.!?]$')
+    spans = [pattern.sub('', span) for span in spans]
+
+    if len(spans) == 0:
+        return ''
+    if len(spans) == 1:
+        return f'"{spans[0]}"'
+    if len(spans) == 2:
+        return f'"{spans[0]}" and "{spans[1]}"'
+    return ', '.join(f'"{span}"' for span in spans[:-1])+ f' and "{spans[-1]}"'
+
+
 def get_prompt(main_prompt: str, extra_prompt: str, row: pd.Series) -> str:
+    main_prompt = fill_placeholders(main_prompt, row.to_dict())
     if extra_prompt is None:
         return main_prompt
+    extra_prompt = fill_placeholders(extra_prompt, row.to_dict())
     if row['has_metaphor']:
         return main_prompt
     return extra_prompt
@@ -103,9 +120,17 @@ def main():
     df['user_prompt'] = [fill_placeholders(user_prompt, record) for record in \
                          df.to_dict(orient='records')]
 
+    if '{metaphorical_spans_text}' in main_system_prompt \
+        or '{metaphorical_spans_text}' in extra_system_prompt:
+        df['metaphorical_spans_text'] = df.metaphorical_spans.\
+            apply(spans_to_text)
+
     output_records = []
     for _, row in tqdm(df.iterrows(), total=len(df), desc='Generating text'):
         system_prompt = get_prompt(main_system_prompt,extra_system_prompt,row)
+        print(system_prompt)
+        print(row['user_prompt'])
+        print('\n')
         answer = get_answer(client, system_prompt, row['user_prompt'],
                             config, args.model)
         record = {'id': row['id'], 'text': answer}
