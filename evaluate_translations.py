@@ -8,6 +8,8 @@ from rouge import Rouge
 from tqdm import tqdm
 from sacrebleu.metrics import BLEU, CHRF, TER
 
+from utils.args_validation import validate_file_extension
+
 tqdm.pandas()
 
 
@@ -18,16 +20,6 @@ def validate_results_paths(result_path: Path, metrics: list, arg_name: str):
             raise ValueError(f'`{arg_name}` already exists and the columns \
                              are different than `metrics`! Choose another \
                              path to export file or delete the existing one.')
-
-
-def validate_file_extension(file_path: str, expected_extension: str) -> Path:
-    path = Path(file_path)
-    if path.suffix != expected_extension:
-        raise argparse.ArgumentTypeError(
-            f"File {file_path} does not have required extension \
-            '{expected_extension}'!"
-        )
-    return path
 
 
 def validate_args(args: argparse.Namespace):

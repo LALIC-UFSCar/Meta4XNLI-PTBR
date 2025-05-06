@@ -1,7 +1,10 @@
 import argparse
+from functools import partial
 from pathlib import Path
 
 import pandas as pd
+
+from utils.args_validation import validate_file_extension
 
 
 def load_datasets(source_path: Path,
@@ -99,13 +102,21 @@ def parse_args() -> argparse.Namespace:
         argparse.Namespace: Parsed arguments.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('-si', '--source_input', type=Path, required=True,
+    parser.add_argument('-si', '--source_input', required=True,
+                        type=partial(validate_file_extension,
+                                     expected_extension='.jsonl'),
                         help='Path to the source dataset.')
-    parser.add_argument('-ti', '--target_input', type=Path, required=True,
+    parser.add_argument('-ti', '--target_input', required=True,
+                        type=partial(validate_file_extension,
+                                     expected_extension='.jsonl'),
                         help='Path to the target dataset.')
-    parser.add_argument('-so', '--source_output', type=Path, required=True,
+    parser.add_argument('-so', '--source_output', required=True,
+                        type=partial(validate_file_extension,
+                                     expected_extension='.jsonl'),
                         help='Path to export the source sample.')
-    parser.add_argument('-to', '--target_output', type=Path, required=True,
+    parser.add_argument('-to', '--target_output', required=True,
+                        type=partial(validate_file_extension,
+                                     expected_extension='.jsonl'),
                         help='Path to export the target sample.')
     parser.add_argument('-l', '--label', type=str, default='both',
                         choices=['metaphorical', 'literal', 'both'],
