@@ -69,19 +69,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('-a', '--summary_all',
                         type=partial(validate_file_extension,
                                      expected_extension='.tsv'),
-                        required=True,
                         help='Path to export TSV file of summary of metrics \
                         for metaphorical and literal examples.')
     parser.add_argument('-M', '--summary_metaphors',
                         type=partial(validate_file_extension,
                                      expected_extension='.tsv'),
-                        required=True,
                         help='Path to export TSV file of summary of metrics \
                         for metaphorical examples.')
     parser.add_argument('-l', '--summary_literals',
                         type=partial(validate_file_extension,
                                      expected_extension='.tsv'),
-                        required=True,
                         help='Path to export TSV file of summary of metrics \
                         for literal examples.')
     parser.add_argument('-i', '--index', type=str, required=True,
@@ -158,21 +155,25 @@ def main():
     df.drop(columns=['src','ref','hyp']).\
         to_csv(args.full_results, sep='\t', index=False)
 
-    df_summary_all = df[args.metrics].mean().to_frame(name=args.index).T
-    header = not args.summary_all.exists()
-    df_summary_all.to_csv(args.summary_all, sep='\t', header=header, mode='a+')
+    if args.summary_all is not None:
+        df_summary_all = df[args.metrics].mean().to_frame(name=args.index).T
+        header = not args.summary_all.exists()
+        df_summary_all.to_csv(args.summary_all, sep='\t',
+                              header=header, mode='a+')
 
-    df_summary_metaphors = df[df.has_metaphor][args.metrics]\
-                            .mean().to_frame(name=args.index).T
-    header = not args.summary_metaphors.exists()
-    df_summary_metaphors.to_csv(args.summary_metaphors, sep='\t',
-                                header=header, mode='a+')
-
-    df_summary_literals = df[~df.has_metaphor][args.metrics]\
+    if args.summary_metaphors is not None:
+        df_summary_metaphors = df[df.has_metaphor][args.metrics]\
                                 .mean().to_frame(name=args.index).T
-    header = not args.summary_literals.exists()
-    df_summary_literals.to_csv(args.summary_literals, sep='\t',
-                               header=header, mode='a+')
+        header = not args.summary_metaphors.exists()
+        df_summary_metaphors.to_csv(args.summary_metaphors, sep='\t',
+                                    header=header, mode='a+')
+
+    if args.summary_literals is not None:
+        df_summary_literals = df[~df.has_metaphor][args.metrics]\
+                                    .mean().to_frame(name=args.index).T
+        header = not args.summary_literals.exists()
+        df_summary_literals.to_csv(args.summary_literals, sep='\t',
+                                header=header, mode='a+')
 
 
 if __name__ == '__main__':
