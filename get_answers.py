@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pandas as pd
 import yaml
+from dotenv import load_dotenv
 from groq import Groq
+from openai import OpenAI
 from tqdm import tqdm
 
 
@@ -29,15 +31,21 @@ def get_answer(client: Groq, prompt: str, user_input: str,
     messages = [{'role': 'system', 'content': prompt},
                 {'role': 'user', 'content': user_input}]
 
-    answer = client.chat.completions.create(
-        messages=messages,
-        model=model,
-        temperature=config['temperature'],
-        top_p=config['top_p'],
-        stop=None,
-        max_completion_tokens=config['max_completion_tokens'],
-        stream=False,
-    )
+    kwargs = {
+        'messages': messages,
+        'model': model,
+        'temperature': config['temperature'],
+        'top_p': config['top_p'],
+        'stop': None,
+        'max_completion_tokens': config['max_completion_tokens'],
+        'stream': False
+    }
+
+    if client.__class__.__module__.startswith("openai"):
+        # OpenAI uses 'max_tokens'
+        kwargs.pop("max_completion_tokens", None)
+
+    answer = client.chat.completions.create(**kwargs)
 
     return answer.choices[0].message.content.strip()
 
@@ -94,12 +102,16 @@ def parse_args() -> argparse.Namespace:
                         help='Seconds parameter of time.sleep.')
     parser.add_argument('-S', '--sample_size', type=int, required=False,
                         help='Size of head sample of the dataset to run.')
+    parser.add_argument('-C', '--client', type=str, choices=['openai', 'groq'],
+                        help='Define the client.', required=True)
 
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+
+    load_dotenv()
 
     main_system_prompt = args.system.read_text(encoding='utf-8')
     if args.additional_system is not None:
@@ -109,7 +121,10 @@ def main():
     user_prompt = args.user.read_text(encoding='utf-8')
     config = parse_yaml(args.config)
 
-    client = Groq(api_key=os.getenv('GROQ_API_KEY'))
+    if args.client == 'groq':
+        client = Groq(api_key=os.getenv('GROQ_API_KEY'))
+    else:
+        client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
     df = pd.read_json(args.dataset, orient='records', lines=True,
                       encoding='utf-8')
@@ -128,9 +143,6 @@ def main():
     output_records = []
     for _, row in tqdm(df.iterrows(), total=len(df), desc='Generating text'):
         system_prompt = get_prompt(main_system_prompt,extra_system_prompt,row)
-        print(system_prompt)
-        print(row['user_prompt'])
-        print('\n')
         answer = get_answer(client, system_prompt, row['user_prompt'],
                             config, args.model)
         record = {'id': row['id'], 'text': answer}
