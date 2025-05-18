@@ -6,3 +6,4 @@ rouge~=1.0.1
 sacrebleu~=2.5.1
 evaluate~=0.4.3
 openai~=1.78.0
+python-dotenv~=1.1.0
