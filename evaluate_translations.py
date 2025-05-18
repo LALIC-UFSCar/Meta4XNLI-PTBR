@@ -3,6 +3,7 @@ from functools import partial
 from pathlib import Path
 
 import pandas as pd
+from evaluate import load
 from nltk.translate.meteor_score import meteor_score
 from rouge import Rouge
 from tqdm import tqdm
@@ -14,7 +15,7 @@ tqdm.pandas()
 
 
 def validate_results_paths(result_path: Path, metrics: list, arg_name: str):
-    if result_path.exists():
+    if result_path is not None and result_path.exists():
         df = pd.read_csv(result_path, sep='\t')
         if df.columns.tolist()[1:] != metrics:
             raise ValueError(f'`{arg_name}` already exists and the columns \
@@ -50,8 +51,12 @@ def parse_args() -> argparse.Namespace:
                         help='Hypothesis texts (candidate translations), \
                         jsonl path.')
     parser.add_argument('-m', '--metrics', nargs='+', type=str,
-                        choices=['bleu','chrf','chrf2','meteor','rouge','ter'],
-                        default=['bleu','chrf','chrf2','meteor','rouge','ter'])
+                        choices=['bertscore_f1','bertscore_precision',
+                                 'bertscore_recall','bleu','chrf','chrf2',
+                                 'meteor','rouge','ter'],
+                        default=['bertscore_f1','bertscore_precision',
+                                 'bertscore_recall','bleu','chrf','chrf2',
+                                 'meteor','rouge','ter'],)
     parser.add_argument('-f', '--full_results',
                         type=partial(validate_file_extension,
                                      expected_extension='.tsv'),
@@ -102,25 +107,33 @@ def main():
                   hypothesis.rename(columns={'text': 'hyp'})[['id','hyp']],
                   how='inner', on='id')
 
-    bleu = BLEU(effective_order=True)
-    chrf = CHRF()
-    chrf2 = CHRF(word_order=2)
-    rouge = Rouge()
-    ter = TER()
+    bertscore_metrics =  {'bertscore_f1', 'bertscore_precision',
+                          'bertscore_recall'}
+    if bertscore_metrics.intersection(set(args.metrics)):
+        bertscore = load("bertscore")
+        scores = bertscore.compute(predictions=df['hyp'].values.tolist(),
+                                   references=df['ref'].values.tolist(),
+                                   model_type="distilbert-base-uncased")
+        df['bertscore_f1'] = scores['f1']
+        df['bertscore_precision'] = scores['precision']
+        df['bertscore_recall'] = scores['recall']
 
     if 'bleu' in args.metrics:
+        bleu = BLEU(effective_order=True)
         df['bleu'] = df.progress_apply(lambda x: \
                                       bleu.sentence_score(x['hyp'],
                                                           [x['ref']]).score,
                                       axis=1)
 
     if 'chrf' in args.metrics:
+        chrf = CHRF()
         df['chrf'] = df.progress_apply(lambda x: \
                                        chrf.sentence_score(x['hyp'],
                                                            [x['ref']]).score,
                                        axis=1)
 
     if 'chrf2' in args.metrics:
+        chrf2 = CHRF(word_order=2)
         df['chrf2'] = df.progress_apply(lambda x: \
                                         chrf2.sentence_score(x['hyp'],
                                                             [x['ref']]).score,
@@ -133,12 +146,14 @@ def main():
                                          axis=1)
 
     if 'rouge' in args.metrics:
+        rouge = Rouge()
         df['rouge'] = df.progress_apply(lambda x: rouge.get_scores(
                                             x['hyp'],
                                             x['ref'])[0]['rouge-l']['f']*100,
                                         axis=1)
 
     if 'ter' in args.metrics:
+        ter = TER()
         df['ter'] = df.progress_apply(lambda x: \
                                       ter.sentence_score(x['hyp'],
                                                          [x['ref']]).score,
