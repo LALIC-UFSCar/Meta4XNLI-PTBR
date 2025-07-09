@@ -17,7 +17,6 @@ for file in "$FOLDER"/*.jsonl; do
         actual_lines=$(wc -l < "$file")
 
         if [[ ! "$actual_lines" -eq "$expected_lines" ]]; then
-            
             echo "❌ $filename: MISMATCH - Expected $expected_lines, Found $actual_lines"
         elif [ $VERBOSE -eq 1 ]; then
             echo "✅ $filename: OK ($actual_lines lines)"
