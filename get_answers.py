@@ -4,6 +4,7 @@ import os
 import re
 from pathlib import Path
 
+import jsonlines
 import pandas as pd
 import yaml
 from dotenv import load_dotenv
@@ -141,16 +142,17 @@ def main():
             apply(spans_to_text)
 
     output_records = []
-    for _, row in tqdm(df.iterrows(), total=len(df), desc='Generating text'):
-        system_prompt = get_prompt(main_system_prompt,extra_system_prompt,row)
-        answer = get_answer(client, system_prompt, row['user_prompt'],
-                            config, args.model)
-        record = {'id': row['id'], 'text': answer}
-        output_records.append(record)
-        time.sleep(args.sleep) # to overcome the limit of requests per minute
+    file = open(args.output, 'a+')
+    with jsonlines.Writer(file) as writer:
+        for _, row in tqdm(df.iterrows(),total=len(df),desc='Generating text'):
+            system_prompt = get_prompt(main_system_prompt,extra_system_prompt,row)
+            answer = get_answer(client, system_prompt, row['user_prompt'],
+                                config, args.model)
+            record = {'id': row['id'], 'text': answer}
+            writer.write(record)
+            time.sleep(args.sleep) # to overcome the limit of requests per minute
 
-    pd.DataFrame(output_records).\
-        to_json(args.output, orient='records', lines=True, force_ascii=False)
+    writer.close()
 
 
 if __name__ == '__main__':
