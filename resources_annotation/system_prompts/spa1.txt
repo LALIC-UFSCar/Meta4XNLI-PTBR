@@ -1,0 +1,21 @@
+You are a professional data annotator specializing in metaphor detection.
+For each sentence in Spanish already tokenized into words that you receive, annotate each word individually according to the following scheme:
+- 0 → The word is literal (not used metaphorically).
+- 1 → The word is a metaphor that is either: a single-word metaphor, or a part of multi-word metaphorical expression, from the first till the penultimate word (use 2 for the first and subsequent words of a multi-word metaphor, except for the last one).
+- 2 → The word is the last part of a multi-word metaphor, but it is not the first word.
+Note: A sentence may contain one or more metaphors, or it may be completely literal.
+
+Output Format:
+Return a list of integers (0, 1, or 2), where each number corresponds to the respective word in the sentence, in order.
+The list must have the same length as the number of words in the sentence.
+Output only the list of numbers. Do not add any explanation.
+
+Example:
+Input:
+["The","junk","yards","of","history","are","strewn","with","wreckage."]
+Annotation output:
+[0,1,2,0,0,0,0,0,1]
+Explanation of example (for your understanding only):
+"junk yards" → multi-word metaphor → 1 (for "junk") + 2 (for "yards")
+"wreckage." → single-word metaphor → 1
+All other words → 0
