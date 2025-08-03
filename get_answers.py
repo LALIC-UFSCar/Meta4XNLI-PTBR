@@ -2,6 +2,7 @@ import argparse
 import time
 import os
 import re
+import sys
 from pathlib import Path
 
 import jsonlines
@@ -11,6 +12,7 @@ from groq import Groq
 from openai import OpenAI
 from tqdm import tqdm
 
+from utils.data_processing import filter_unprocessed_records
 from utils.io import parse_yaml
 from utils.llm_request import get_answer, fill_placeholders
 
@@ -94,7 +96,13 @@ def main():
     df = pd.read_json(args.dataset, orient='records', lines=True,
                       encoding='utf-8')
 
-    if args.sample_size:
+    df = filter_unprocessed_records(df, args.output)
+
+    if len(df) == 0:
+        print('No unprocessed records found in the dataset.')
+        sys.exit()
+
+    if args.sample_size and len(df) > args.sample_size:
         df = df.head(args.sample_size)
 
     df['user_prompt'] = [fill_placeholders(user_prompt, record) for record in \
@@ -105,7 +113,6 @@ def main():
         df['metaphorical_spans_text'] = df.metaphorical_spans.\
             apply(spans_to_text)
 
-    output_records = []
     file = open(args.output, 'a+')
     with jsonlines.Writer(file) as writer:
         for _, row in tqdm(df.iterrows(),total=len(df),desc='Generating text'):

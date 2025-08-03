@@ -11,6 +11,7 @@ from groq import Groq
 from openai import OpenAI
 from tqdm import tqdm
 
+from utils.data_processing import filter_unprocessed_records
 from utils.io import parse_yaml
 from utils.llm_request import fill_placeholders, get_answer
 
@@ -42,28 +43,6 @@ def is_annotation_valid(annotation: list, tokens: list) -> bool:
     if len(annotation) != len(tokens):
         return False
     return all(el in {0, 1, 2} for el in annotation)
-
-
-def filter_unprocessed_records(df, output_path):
-    """
-    Filters the DataFrame to exclude records already processed in the output file.
-
-    Args:
-        df (pd.DataFrame): The dataset loaded from args.dataset.
-        output_path (Path): The path to the output file.
-
-    Returns:
-        pd.DataFrame: A filtered DataFrame with unprocessed records.
-    """
-    if output_path.exists():
-        # Read the output file and count the number of lines
-        df_processed = pd.read_json(output_path, orient='records', lines=True,
-                          encoding='utf-8')
-
-        # Filter the DataFrame to exclude already processed IDs
-        df = df[~df['id'].isin(df_processed.id)]
-
-    return df
 
 
 def parse_args() -> argparse.Namespace:
@@ -114,6 +93,10 @@ def main():
                       encoding='utf-8')
 
     df = filter_unprocessed_records(df, args.output)
+
+    if len(df) == 0:
+        print('No unprocessed records found in the dataset.')
+        sys.exit()
 
     if args.sample_size and len(df) > args.sample_size:
         df = df.head(args.sample_size)
