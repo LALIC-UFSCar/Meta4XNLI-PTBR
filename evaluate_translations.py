@@ -29,9 +29,9 @@ def validate_results_paths(result_path: Path, metrics: list, arg_name: str):
 
 
 def validate_args(args: argparse.Namespace):
-    metrics = sorted(args.metrics)
-    validate_results_paths(args.summary_metaphors, metrics,'summary_metaphors')
-    validate_results_paths(args.summary_literals, metrics, 'summary_literals')
+    validate_results_paths(args.summary_all, args.metrics, 'summary_all')
+    validate_results_paths(args.summary_metaphors, args.metrics,'summary_metaphors')
+    validate_results_paths(args.summary_literals, args.metrics, 'summary_literals')
 
 
 def parse_args() -> argparse.Namespace:
