@@ -3,6 +3,7 @@ from functools import partial
 from pathlib import Path
 
 import pandas as pd
+import torch
 from comet import download_model, load_from_checkpoint
 from evaluate import load
 from nltk.translate.meteor_score import meteor_score
@@ -13,20 +14,22 @@ from sacrebleu.metrics import BLEU, CHRF, TER
 from utils.args_validation import validate_file_extension
 
 tqdm.pandas()
+torch.set_float32_matmul_precision('high')
 
 
 def validate_results_paths(result_path: Path, metrics: list, arg_name: str):
     if result_path is not None and result_path.exists():
         df = pd.read_csv(result_path, sep='\t')
         if df.columns.tolist()[1:] != metrics:
-            raise ValueError(f'`{arg_name}` already exists and the columns \
-                             are different than `metrics`! Choose another \
-                             path to export file or delete the existing one.')
+            print(f'Columns of the existing file: {df.columns.tolist()[1:]}')
+            print(f'Metrics to be generated: {metrics}')
+            raise ValueError(f'`{arg_name}` already exists and the columns ' \
+                             'are different than `metrics`! Choose another ' \
+                             'path to export file or delete the existing one.')
 
 
 def validate_args(args: argparse.Namespace):
     metrics = sorted(args.metrics)
-    validate_results_paths(args.summary_all, metrics, 'summary_all')
     validate_results_paths(args.summary_metaphors, metrics,'summary_metaphors')
     validate_results_paths(args.summary_literals, metrics, 'summary_literals')
 
@@ -54,11 +57,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('-m', '--metrics', nargs='+', type=str,
                         choices=['bertscore_f1','bertscore_precision',
                                  'bertscore_recall','bleu','chrf','chrf2',
-                                 'comet_ref','comet_no_ref',
+                                 'comet_no_ref','comet_ref',
                                  'meteor','rouge','ter'],
                         default=['bertscore_f1','bertscore_precision',
                                  'bertscore_recall','bleu','chrf','chrf2',
-                                 'comet_ref','comet_no_ref',
+                                 'comet_no_ref','comet_ref',
                                  'meteor','rouge','ter'],)
     parser.add_argument('-f', '--full_results',
                         type=partial(validate_file_extension,
@@ -142,14 +145,6 @@ def main():
                                                             [x['ref']]).score,
                                         axis=1)
 
-    if 'comet_ref' in args.metrics:
-        model_path = download_model("Unbabel/XCOMET-XL")
-        model = load_from_checkpoint(model_path)
-        records = df.rename(columns={'hyp':'mt'})[['src','mt','ref']].\
-                    to_dict('records')
-        scores = model.predict(records, batch_size=8, gpus=1).scores
-        df['comet_ref'] = scores
-
     if 'comet_no_ref' in args.metrics:
         model_path = download_model("Unbabel/XCOMET-XL")
         model = load_from_checkpoint(model_path)
@@ -157,6 +152,14 @@ def main():
                     to_dict('records')
         scores = model.predict(records, batch_size=8, gpus=1).scores
         df['comet_no_ref'] = scores
+
+    if 'comet_ref' in args.metrics:
+        model_path = download_model("Unbabel/XCOMET-XL")
+        model = load_from_checkpoint(model_path)
+        records = df.rename(columns={'hyp':'mt'})[['src','mt','ref']].\
+                    to_dict('records')
+        scores = model.predict(records, batch_size=8, gpus=1).scores
+        df['comet_ref'] = scores
 
     if 'meteor' in args.metrics:
         df['meteor'] = df.progress_apply(lambda x: \
