@@ -2,6 +2,7 @@ import argparse
 import ast
 import time
 import os
+import sys
 from pathlib import Path
 
 import jsonlines
